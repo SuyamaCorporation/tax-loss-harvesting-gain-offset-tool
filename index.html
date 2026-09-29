@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tax-Loss Harvesting Capital Gain Offset Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    input[type=number] { appearance: textfield; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .positive { color: #16a34a; }
+    .negative { color: #dc2626; }
+    .neutral { color: #6366f1; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-emerald-50 via-white to-teal-50 min-h-screen font-sans">
+  <header class="bg-white shadow-sm sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+      <span class="text-3xl" aria-hidden="true">📉</span>
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">Tax-Loss Harvesting Capital Gain Offset Tool</h1>
+        <p class="text-sm text-gray-500">Model how harvested losses reduce your annual tax liability</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-8" role="main">
+    <!-- Tax Rates Panel -->
+    <section class="bg-white rounded-2xl shadow-md p-6 mb-6" aria-label="Tax Rate Configuration">
+      <h2 class="font-semibold text-gray-800 mb-4">Your Tax Rates</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="stRate">Short-Term Cap Gain Rate (%)</label>
+          <input id="stRate" type="number" value="32" min="0" max="50" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="Short-term capital gains tax rate" />
+          <p class="text-xs text-gray-400 mt-1">Ordinary income rate</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="ltRate">Long-Term Cap Gain Rate (%)</label>
+          <input id="ltRate" type="number" value="15" min="0" max="30" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="Long-term capital gains tax rate" />
+          <p class="text-xs text-gray-400 mt-1">0%, 15%, or 20%</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="niitRate">NIIT Rate (%)</label>
+          <input id="niitRate" type="number" value="3.8" min="0" max="5" step="0.1" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="Net investment income tax rate" />
+          <p class="text-xs text-gray-400 mt-1">3.8% if income > $200k</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="stateRate">State Tax Rate (%)</label>
+          <input id="stateRate" type="number" value="5" min="0" max="20" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="State income tax rate" />
+          <p class="text-xs text-gray-400 mt-1">Varies by state</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Capital Gains Entry -->
+    <section class="bg-white rounded-2xl shadow-md p-6 mb-6" aria-label="Capital Gains Entry">
+      <h2 class="font-semibold text-gray-800 mb-4">Capital Gains (Before Harvesting)</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="stGain">Short-Term Gains ($)</label>
+          <input id="stGain" type="number" value="15000" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="Short-term capital gains amount" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1" for="ltGain">Long-Term Gains ($)</label>
+          <input id="ltGain" type="number" value="25000" min="0" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none" aria-label="Long-term capital gains amount" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Harvested Losses Entry -->
+    <section class="bg-white rounded-2xl shadow-md p-6 mb-6" aria-label="Harvested Losses Entry">
+      <h2 class="font-semibold text-gray-800 mb-4">Harvested Losses</h2>
+      <div id="lossRows" class="space-y-3"></div>
+      <button id="addLossBtn" class="mt-4 text-emerald-700 border border-emerald-300 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-400" aria-label="Add harvested loss entry">+ Add Loss Position</button>
+    </section>
+
+    <div class="flex gap-3 mb-8">
+      <button id="calcBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-emerald-400" aria-label="Calculate tax savings">Calculate Tax Impact</button>
+      <button id="saveBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-6 py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-400" aria-label="Save to local storage">Save</button>
+      <button id="loadBtn" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold px-6 py-2 rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-400" aria-label="Load from local storage">Load</button>
+    </div>
+
+    <!-- Results -->
+    <section id="results" class="hidden fade-in" aria-label="Tax calculation results">
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-2xl shadow-md p-4 text-center border-t-4 border-red-400">
+          <p class="text-xs text-gray-500 mb-1">Tax Without Harvesting</p>
+          <p id="taxBefore" class="text-2xl font-bold text-red-600">—</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 text-center border-t-4 border-emerald-400">
+          <p class="text-xs text-gray-500 mb-1">Tax After Harvesting</p>
+          <p id="taxAfter" class="text-2xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 text-center border-t-4 border-indigo-400">
+          <p class="text-xs text-gray-500 mb-1">Tax Savings</p>
+          <p id="taxSavings" class="text-2xl font-bold text-indigo-600">—</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-4 text-center border-t-4 border-yellow-400">
+          <p class="text-xs text-gray-500 mb-1">Carryover Loss</p>
+          <p id="carryover" class="text-2xl font-bold text-yellow-600">—</p>
+        </div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        <div class="bg-white rounded-2xl shadow-md p-5">
+          <h3 class="font-semibold text-gray-800 mb-4">Before vs After Comparison</h3>
+          <canvas id="compChart" role="img" aria-label="Tax comparison bar chart" height="200"></canvas>
+        </div>
+        <div class="bg-white rounded-2xl shadow-md p-5">
+          <h3 class="font-semibold text-gray-800 mb-4">Loss Netting Breakdown</h3>
+          <div id="nettingBreakdown" class="space-y-3 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- Offset Waterfall -->
+      <div class="bg-white rounded-2xl shadow-md p-5 mb-6">
+        <h3 class="font-semibold text-gray-800 mb-4">Offset Application Order (IRS Rules)</h3>
+        <div id="waterfall" class="space-y-2"></div>
+      </div>
+
+      <!-- Wash Sale Warning -->
+      <div class="bg-amber-50 border border-amber-300 rounded-2xl p-5">
+        <h3 class="font-semibold text-amber-800 mb-2 flex items-center gap-2">⚠️ Wash Sale Rule Reminder</h3>
+        <p class="text-sm text-amber-700">You cannot repurchase the <strong>same or substantially identical</strong> security within 30 days before or after the sale. The disallowed loss is added to the cost basis of the repurchased shares. Always consult a tax professional before executing tax-loss harvesting.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let lossCount = 0;
+    let compChart = null;
+
+    function addLossRow(symbol='', amount='', type='ST') {
+      lossCount++;
+      const id = lossCount;
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-3 flex-wrap';
+      row.id = 'lossRow' + id;
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', 'Loss position ' + id);
+
+      const symInput = document.createElement('input');
+      symInput.type = 'text';
+      symInput.placeholder = 'Symbol (e.g. NVDA)';
+      symInput.value = symbol;
+      symInput.className = 'border border-gray-300 rounded-lg px-3 py-2 w-32 focus:ring-2 focus:ring-emerald-400 focus:outline-none text-sm';
+      symInput.setAttribute('aria-label', 'Security symbol for loss position ' + id);
+
+      const amtInput = document.createElement('input');
+      amtInput.type = 'number';
+      amtInput.placeholder = 'Loss amount $';
+      amtInput.value = amount;
+      amtInput.min = '0';
+      amtInput.className = 'border border-gray-300 rounded-lg px-3 py-2 w-40 focus:ring-2 focus:ring-emerald-400 focus:outline-none text-sm';
+      amtInput.setAttribute('aria-label', 'Loss amount for position ' + id);
+
+      const typeSelect = document.createElement('select');
+      typeSelect.className = 'border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-emerald-400 focus:outline-none text-sm';
+      typeSelect.setAttribute('aria-label', 'Loss type for position ' + id);
+      ['ST (Short-Term)', 'LT (Long-Term)'].forEach((opt, i) => {
+        const o = document.createElement('option');
+        o.value = i === 0 ? 'ST' : 'LT';
+        o.textContent = opt;
+        if ((i === 0 ? 'ST' : 'LT') === type) o.selected = true;
+        typeSelect.appendChild(o);
+      });
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '✕';
+      removeBtn.className = 'text-red-400 hover:text-red-600 font-bold text-lg focus:outline-none focus:ring-2 focus:ring-red-400 rounded';
+      removeBtn.setAttribute('aria-label', 'Remove loss position ' + id);
+      removeBtn.addEventListener('click', () => row.remove());
+
+      row.append(symInput, amtInput, typeSelect, removeBtn);
+      document.getElementById('lossRows').appendChild(row);
+    }
+
+    // Seed defaults
+    addLossRow('NVDA', '8000', 'ST');
+    addLossRow('TSLA', '12000', 'LT');
+
+    document.getElementById('addLossBtn').addEventListener('click', () => addLossRow());
+
+    function getLosses() {
+      const rows = document.querySelectorAll('#lossRows > div');
+      const losses = { ST: 0, LT: 0, items: [] };
+      rows.forEach(row => {
+        const inputs = row.querySelectorAll('input');
+        const select = row.querySelector('select');
+        const sym = inputs[0].value.trim().toUpperCase() || 'POS';
+        const amt = parseFloat(inputs[1].value) || 0;
+        const type = select.value;
+        losses[type] += amt;
+        losses.items.push({ sym, amt, type });
+      });
+      return losses;
+    }
+
+    function fmt(n) { return '$' + Math.abs(Math.round(n)).toLocaleString(); }
+
+    function calcTax(stGain, ltGain, stRate, ltRate, niitRate, stateRate) {
+      const ltEffective = ltRate + niitRate + stateRate;
+      const stEffective = stRate + stateRate;
+      return stGain * stEffective / 100 + ltGain * ltEffective / 100;
+    }
+
+    function calculate() {
+      const stGain = parseFloat(document.getElementById('stGain').value) || 0;
+      const ltGain = parseFloat(document.getElementById('ltGain').value) || 0;
+      const stRate = parseFloat(document.getElementById('stRate').value) || 0;
+      const ltRate = parseFloat(document.getElementById('ltRate').value) || 0;
+      const niitRate = parseFloat(document.getElementById('niitRate').value) || 0;
+      const stateRate = parseFloat(document.getElementById('stateRate').value) || 0;
+
+      const losses = getLosses();
+      const stLoss = losses.ST;
+      const ltLoss = losses.LT;
+
+      const taxBefore = calcTax(stGain, ltGain, stRate, ltRate, niitRate, stateRate);
+
+      // IRS netting rules:
+      // ST losses offset ST gains first, then LT gains
+      // LT losses offset LT gains first, then ST gains
+      let netST = stGain;
+      let netLT = ltGain;
+      let appliedSTtoST = 0, appliedSTtoLT = 0;
+      let appliedLTtoLT = 0, appliedLTtoST = 0;
+      let waterfall = [];
+
+      // ST losses vs ST gains
+      appliedSTtoST = Math.min(stLoss, netST);
+      netST -= appliedSTtoST;
+      let remainSTLoss = stLoss - appliedSTtoST;
+
+      // ST losses vs LT gains
+      appliedSTtoLT = Math.min(remainSTLoss, netLT);
+      netLT -= appliedSTtoLT;
+      remainSTLoss -= appliedSTtoLT;
+
+      // LT losses vs LT gains
+      appliedLTtoLT = Math.min(ltLoss, netLT);
+      netLT -= appliedLTtoLT;
+      let remainLTLoss = ltLoss - appliedLTtoLT;
+
+      // LT losses vs ST gains
+      appliedLTtoST = Math.min(remainLTLoss, netST);
+      netST -= appliedLTtoST;
+      remainLTLoss -= appliedLTtoST;
+
+      // Net carryover
+      const carryoverST = remainSTLoss > 0 ? remainSTLoss : 0;
+      const carryoverLT = remainLTLoss > 0 ? remainLTLoss : 0;
+      const totalCarryover = carryoverST + carryoverLT;
+
+      // Ensure non-negative
+      const finalST = Math.max(0, netST);
+      const finalLT = Math.max(0, netLT);
+
+      const taxAfter = calcTax(finalST, finalLT, stRate, ltRate, niitRate, stateRate);
+      const savings = taxBefore - taxAfter;
+
+      document.getElementById('taxBefore').textContent = fmt(taxBefore);
+      document.getElementById('taxAfter').textContent = fmt(taxAfter);
+      document.getElementById('taxSavings').textContent = fmt(savings);
+      document.getElementById('carryover').textContent = fmt(totalCarryover);
+
+      // Netting breakdown
+      const nb = document.getElementById('nettingBreakdown');
+      nb.innerHTML = '';
+      const rows2 = [
+        ['Gross ST Gains', stGain, false],
+        ['Gross LT Gains', ltGain, false],
+        ['ST Losses Harvested', stLoss, true],
+        ['LT Losses Harvested', ltLoss, true],
+        ['Net ST Gains (after offset)', finalST, false],
+        ['Net LT Gains (after offset)', finalLT, false],
+        ['ST Loss Carryover', carryoverST, true],
+        ['LT Loss Carryover', carryoverLT, true],
+      ];
+      rows2.forEach(([label, val, isLoss]) => {
+        const row = document.createElement('div');
+        row.className = 'flex justify-between items-center py-1.5 border-b border-gray-100';
+        const l = document.createElement('span');
+        l.className = 'text-gray-600';
+        l.textContent = label;
+        const v = document.createElement('span');
+        v.className = isLoss ? 'font-semibold text-red-600' : 'font-semibold text-gray-800';
+        v.textContent = (isLoss ? '-' : '') + fmt(val);
+        row.append(l, v);
+        nb.appendChild(row);
+      });
+
+      // Waterfall
+      const wf = document.getElementById('waterfall');
+      wf.innerHTML = '';
+      const steps = [
+        { label: 'ST losses offset ST gains', amount: appliedSTtoST, color: 'bg-red-100 border-red-300' },
+        { label: 'Remaining ST losses offset LT gains', amount: appliedSTtoLT, color: 'bg-orange-100 border-orange-300' },
+        { label: 'LT losses offset LT gains', amount: appliedLTtoLT, color: 'bg-yellow-100 border-yellow-300' },
+        { label: 'Remaining LT losses offset ST gains', amount: appliedLTtoST, color: 'bg-blue-100 border-blue-300' },
+        { label: 'Remaining losses → carryforward to next year', amount: totalCarryover, color: 'bg-purple-100 border-purple-300' },
+      ];
+      steps.forEach((s, i) => {
+        if (s.amount <= 0) return;
+        const el = document.createElement('div');
+        el.className = 'flex items-center gap-3 p-3 rounded-lg border ' + s.color;
+        const num = document.createElement('span');
+        num.className = 'font-bold text-gray-500 text-sm w-5';
+        num.textContent = (i + 1);
+        const lbl = document.createElement('span');
+        lbl.className = 'flex-1 text-sm text-gray-700';
+        lbl.textContent = s.label;
+        const amt = document.createElement('span');
+        amt.className = 'font-bold text-gray-800';
+        amt.textContent = fmt(s.amount);
+        el.append(num, lbl, amt);
+        wf.appendChild(el);
+      });
+
+      // Chart
+      if (compChart) compChart.destroy();
+      const ctx = document.getElementById('compChart').getContext('2d');
+      compChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['ST Tax Before', 'ST Tax After', 'LT Tax Before', 'LT Tax After', 'Total Before', 'Total After'],
+          datasets: [{
+            label: 'Tax Liability ($)',
+            data: [
+              Math.round(stGain * (stRate + stateRate) / 100),
+              Math.round(finalST * (stRate + stateRate) / 100),
+              Math.round(ltGain * (ltRate + niitRate + stateRate) / 100),
+              Math.round(finalLT * (ltRate + niitRate + stateRate) / 100),
+              Math.round(taxBefore),
+              Math.round(taxAfter),
+            ],
+            backgroundColor: ['#fca5a5','#86efac','#fca5a5','#86efac','#f87171','#34d399'],
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + fmt(ctx.parsed.y) } } },
+          scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } }
+        }
+      });
+
+      document.getElementById('results').classList.remove('hidden');
+    }
+
+    document.getElementById('calcBtn').addEventListener('click', calculate);
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const losses = getLosses();
+      const data = {
+        stGain: document.getElementById('stGain').value,
+        ltGain: document.getElementById('ltGain').value,
+        stRate: document.getElementById('stRate').value,
+        ltRate: document.getElementById('ltRate').value,
+        niitRate: document.getElementById('niitRate').value,
+        stateRate: document.getElementById('stateRate').value,
+        losses: losses.items,
+      };
+      localStorage.setItem('tlh_tool_v1', JSON.stringify(data));
+      document.getElementById('saveBtn').textContent = '✅ Saved!';
+      setTimeout(() => { document.getElementById('saveBtn').textContent = 'Save'; }, 1500);
+    });
+
+    document.getElementById('loadBtn').addEventListener('click', () => {
+      const raw = localStorage.getItem('tlh_tool_v1');
+      if (!raw) { alert('No saved data.'); return; }
+      const data = JSON.parse(raw);
+      ['stGain','ltGain','stRate','ltRate','niitRate','stateRate'].forEach(k => {
+        if (data[k] !== undefined) document.getElementById(k).value = data[k];
+      });
+      document.getElementById('lossRows').innerHTML = '';
+      lossCount = 0;
+      (data.losses || []).forEach(l => addLossRow(l.sym, l.amt, l.type));
+      calculate();
+    });
+
+    calculate();
+  </script>
+</body>
+</html>
